@@ -1,0 +1,1964 @@
+diff --git a/.github/workflows/ghost-trace-lite.yml b/.github/workflows/ghost-trace-lite.yml
+new file mode 100644
+index 0000000000000000000000000000000000000000..d78460f56d505e40ee6863f2322d7cd9973d3e06
+--- /dev/null
++++ b/.github/workflows/ghost-trace-lite.yml
+@@ -0,0 +1,30 @@
++name: GHOST TRACE Lite tests
++on:
++  push:
++    paths:
++      - 'ghost-trace-lite/**'
++      - '.github/workflows/ghost-trace-lite.yml'
++  pull_request:
++    paths:
++      - 'ghost-trace-lite/**'
++      - '.github/workflows/ghost-trace-lite.yml'
++permissions:
++  contents: read
++jobs:
++  test:
++    strategy:
++      matrix:
++        os: [ubuntu-latest, windows-latest]
++        python: ["3.11", "3.12"]
++    runs-on: ${{ matrix.os }}
++    defaults:
++      run:
++        working-directory: ghost-trace-lite
++    steps:
++      - uses: actions/checkout@v6
++      - uses: actions/setup-python@v6
++        with:
++          python-version: ${{ matrix.python }}
++      - run: python -m unittest discover -s tests -v
++      - run: python -m pip install .
++      - run: ghost-trace demo --out smoke-case
+diff --git a/README.md b/README.md
+index 518e458ab34d8a0f6240d454067d870549228f0a..782d362e193a1279d6475a0b6acf20682de92b3c 100644
+--- a/README.md
++++ b/README.md
+@@ -2,6 +2,17 @@
+ 
+ A small Python SOC investigation tool that classifies indicators, routes them to relevant intelligence providers, normalizes results, calculates a transparent risk score, and saves a JSON investigation report.
+ 
++## GHOST TRACE Lite
++
++The [GHOST TRACE Lite toolkit](ghost-trace-lite/) is available alongside RONIN IOC Investigator. It includes an interactive menu, an offline case demo, and optional IOC enrichment. With Python 3.11 or newer, open the menu from the repository root.
++
++```powershell
++cd ghost-trace-lite
++py -3 main.py
++```
++
++On macOS or Linux, use `python3 main.py` inside `ghost-trace-lite/`.
++
+ ## Supported indicators
+ 
+ - IPv4 / IPv6
+diff --git a/ghost-trace-lite/.gitignore b/ghost-trace-lite/.gitignore
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d5310ee6e58063caaeca91a7809151a2bc21d8f
+--- /dev/null
++++ b/ghost-trace-lite/.gitignore
+@@ -0,0 +1,11 @@
++__pycache__/
++*.py[cod]
++*.egg-info/
++build/
++dist/
++.venv/
++.idea/
++.env
++.env.*
++ghost-trace-demo/
++ghost-trace-case/
+diff --git a/ghost-trace-lite/README.md b/ghost-trace-lite/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d4d1eede3eefa3969ff5384799742a208a2593e
+--- /dev/null
++++ b/ghost-trace-lite/README.md
+@@ -0,0 +1,99 @@
++# GHOST TRACE Lite
++
++**One Python CLI for IOC triage, detection, and case reporting.** Run a synthetic SOC investigation from authentication logs and network flows through alert explanation, a relationship graph, and an evidence-linked report. The demo runs offline with the Python standard library.
++
++## Open the menu
++
++Requires Python 3.11 or newer. Open a terminal in the extracted `ghost-trace-lite` folder. In PyCharm, open that folder as a project and use its Terminal tab with a Python 3.11+ interpreter.
++
++**Windows PowerShell**
++
++```powershell
++py -3 main.py
++```
++
++**macOS or Linux**
++
++```bash
++python3 main.py
++```
++
++Choose **11** to run the offline demo or pick one of the ten tools. At file prompts, press Enter to use the bundled evidence. Choose **12** to manage API keys, then use **1** to choose an IOC enrichment provider. Use the PyCharm **Terminal** tab for masked key entry.
++
++The direct commands are available through `python -m ghost_trace_lite`. Run `python -m ghost_trace_lite demo` to start the demo directly, or `ghost-trace menu` after installation to open the menu.
++
++The demo finds three failed logins from a single source, one later successful login to the same workstation, and two candidate flows originating from that workstation after the login. Compare the evidence IDs in the report with the bundled CSV rows. Use `--out demo-second-run` to pick a fresh output folder for a second run.
++
++| Demo output | What it contains |
++| --- | --- |
++| `ghost-trace-demo/case.md` | A human-readable investigation report and recommended pivots |
++| `ghost-trace-demo/case.json` | Structured alerts, timeline, scope checks, sanitized HTTP headers, and relationships |
++| `ghost-trace-demo/relationships.mmd` | A Mermaid diagram of observed relationships in the supplied logs |
++
++## Ten projects in one CLI
++
++| Project | Command | Lite feature |
++| --- | --- | --- |
++| GHOST TRACE | `ioc` | Normalize IPs and domains, classify IP scope, and optionally look up a public IOC with a selected provider. |
++| SHADOW RECON | `scope` | Check a hostname against exact and wildcard authorized scope rules. |
++| SENTINEL | `detect` | Detect failed-login bursts for a specific user, host, and source IP. |
++| GHOST VISION | `traffic` | Summarize bytes, top sources, and destination ports from a network-flow CSV. |
++| PHANTOM HUNTER | `hunt` | Pivot from an alert to a matching successful login and nearby traffic from the host IP. |
++| KAGE CORE | `explain` | Explain which observations triggered each alert and cite their CSV row IDs. |
++| SPECTER MAP | `map` | Print a Mermaid graph of observed relationships between users, hosts, IPs, and domains. |
++| SHADOW PROXY | `headers` | Inspect a saved HTTP header block and redact values outside an allowlist. |
++| RONIN SOC | `investigate` | Run a case end to end and export Markdown, JSON, and Mermaid. |
++| KAGE AI | `advise` | Suggest next steps using deterministic local rules and case evidence. |
++
++The source runs directly with `python -m ghost_trace_lite`. To install the `ghost-trace` command into your active environment, run `python -m pip install .`.
++
++```text
++ghost-trace ioc 192.0.2.44
++ghost-trace scope updates.ronin.test --rules ghost_trace_lite/demo_data/scope.txt
++ghost-trace hunt ghost_trace_lite/demo_data/auth.csv ghost_trace_lite/demo_data/flows.csv
++ghost-trace investigate ghost_trace_lite/demo_data --out my-case
++ghost-trace --help
++```
++
++## Run your own case
++
++Pass an evidence directory to `investigate` or `advise`. All four UTF-8 files are required for a case. Commands such as `detect` and `traffic` accept a single input.
++
++| File | Format |
++| --- | --- |
++| `auth.csv` | Columns `timestamp,user,host,host_ip,src_ip,outcome`. Use `success` or `failure` for outcome. User and host labels accept ASCII letters, digits, dots, underscores, @, and hyphens, starting with a letter or digit. |
++| `flows.csv` | Columns `timestamp,src_ip,dst_ip,dst_port,protocol,bytes`. Use `tcp` or `udp` and a nonnegative byte count. Add `dst_domain` when the source observed a destination hostname. |
++| `headers.txt` | One request header block. An optional first request line supplies the method. The blank line ends the block. Values retained are a validated `Host` and the `Content-Type` media type without parameters. |
++| `scope.txt` | One ASCII hostname or wildcard per line. `*.ronin.test` matches descendants of `ronin.test`. List `ronin.test` separately to include the apex. Use `#` for comments. |
++
++CSV timestamps need a UTC offset or `Z`, such as `2026-01-15T14:03:05Z`. The CLI sorts rows in UTC and preserves original physical line numbers in references such as `auth:5`. It accepts IPv4 and IPv6 and expects dotted ASCII hostnames. For internationalized domain names, use their Punycode form.
++
++**Detection and correlation.** By default, three failures within five minutes produce an alert. A qualifying burst consumes those failure rows, and a successful login resets the pending failures for the same user, host, host IP, and source IP. The hunt selects a later successful login with the same fields within ten minutes of the alert, then looks for flows originating from the logged-in host IP within ten minutes after success. Correlation identifies leads for review. Use `--threshold`, `--window`, and `--hunt-window` to adjust this behavior.
++
++**Data handling.** Use synthetic or approved data for public demos. Reports include account labels, IPs, domains, and sanitized header names. The scope check compares hostnames against the rules you supply. The CLI analyzes local files and performs no active scanning.
++
++## Optional IOC enrichment
++
++In menu option **12**, pick a provider and press **s** to enter a key. The terminal hides the entry and the key is held in memory for that session. Press **c** to clear the session key. If a provider has no session key, GHOST TRACE Lite uses its environment variable if set.
++
++| Provider | IOC type | Environment variable | Returned fields |
++| --- | --- | --- | --- |
++| [VirusTotal](https://docs.virustotal.com/reference/ip-info) | Public IP or domain | `VT_API_KEY` | Analysis counts |
++| [Shodan](https://help.shodan.io/developer-fundamentals/looking-up-ip-info) | Public IP | `SHODAN_API_KEY` | Observed ports and host metadata. This lookup requires an eligible Shodan membership. |
++| [AlienVault OTX](https://otx.alienvault.com/api) | Public IP or domain | `OTX_API_KEY` | Threat intelligence pulse count |
++
++Choose **1** in the main menu, enter an IOC, and choose **0** to classify it offline or select a provider and confirm the lookup. Use public, non-sensitive indicators you are authorized to share. A provider receives the normalized IOC when you select it. VirusTotal explains how queried indicators can enter its shared dataset in its [IP report documentation](https://docs.virustotal.com/reference/ip-info) and [domain report documentation](https://docs.virustotal.com/reference/domain-info).
++
++For the direct CLI, set the provider's environment variable and use `ghost-trace ioc YOUR_PUBLIC_IOC --provider virustotal` (or `shodan` or `otx`). The `--virustotal` flag is also available. A `not_found` status indicates no provider record. An `error` status includes a short diagnostic alongside the local classification.
++
++## Tests
++
++```bash
++python -m unittest discover -s tests -v
++```
++
++The suite checks IOC validation, wildcard boundaries, detection and correlation windows, header redaction, menu navigation, the offline case, and mocked provider responses. The included GitHub Actions workflow runs the tests and an installed CLI smoke test on Windows and Linux.
++
++## RONIN Python Academy
++
++The `ioc` command is the Phase 1 learning slice. Start with Mission **05J** and use `ghost_trace_lite/ghost_trace.py` as the reference after attempting the lab. The other commands show how the same evidence can feed detection, correlation, and reporting.
+diff --git a/ghost-trace-lite/ghost_trace_lite/__init__.py b/ghost-trace-lite/ghost_trace_lite/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..45d506adb15ac07a2756389fbf26c2a5794b28a8
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/__init__.py
+@@ -0,0 +1 @@
++"""GHOST TRACE Lite cybersecurity investigation toolkit."""
+diff --git a/ghost-trace-lite/ghost_trace_lite/__main__.py b/ghost-trace-lite/ghost_trace_lite/__main__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..eb53e2f31b2f703ad32ef64b8a41faa3e7d18e08
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/__main__.py
+@@ -0,0 +1,3 @@
++from .cli import main
++
++raise SystemExit(main())
+diff --git a/ghost-trace-lite/ghost_trace_lite/cli.py b/ghost-trace-lite/ghost_trace_lite/cli.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..be65c6ce15856af12e5b705072d3a88dacaa0b35
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/cli.py
+@@ -0,0 +1,164 @@
++"""Command-line entry points for the ten GHOST TRACE Lite modules."""
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++from .enrichment import PROVIDERS, enrich_indicator, lookup_key
++from .evidence import load_auth, load_flows
++from .ghost_trace import inspect_ioc
++from .ghost_vision import summarize_traffic
++from .kage_core import explain_alerts
++from .menu import run_menu
++from .phantom_hunter import correlate
++from .ronin_soc import build_case, export_case
++from .sentinel import alert_record, detect_failed_logins
++from .shadow_proxy import inspect_headers
++from .shadow_recon import check_scope, load_scope
++from .specter_map import observed_relationships, render_mermaid
++
++DEMO_DIR = Path(__file__).with_name("demo_data")
++
++
++def positive_int(value):
++    try:
++        number = int(value)
++    except ValueError:
++        raise argparse.ArgumentTypeError("expected a positive integer") from None
++    if not 1 <= number <= 10080:
++        raise argparse.ArgumentTypeError("expected an integer between 1 and 10080")
++    return number
++
++
++def add_detection_options(parser):
++    parser.add_argument("--threshold", type=positive_int, default=3, help="failed logins required (default 3)")
++    parser.add_argument("--window", type=positive_int, default=5, help="detection window in minutes (default 5)")
++
++
++def add_hunt_options(parser):
++    add_detection_options(parser)
++    parser.add_argument("--hunt-window", type=positive_int, default=10, help="pivot window in minutes (default 10)")
++
++
++def build_parser():
++    parser = argparse.ArgumentParser(prog="ghost-trace", description="GHOST TRACE Lite investigation toolkit")
++    commands = parser.add_subparsers(dest="command", required=True)
++
++    ioc = commands.add_parser("ioc", help="GHOST TRACE — validate and classify an IP or domain")
++    ioc.add_argument("value")
++    lookup = ioc.add_mutually_exclusive_group()
++    lookup.add_argument("--provider", choices=PROVIDERS, help="look up a public IOC with this provider")
++    lookup.add_argument("--virustotal", dest="provider", action="store_const", const="virustotal",
++                        help="alias for --provider virustotal")
++
++    scope = commands.add_parser("scope", help="SHADOW RECON — check a hostname against scope rules")
++    scope.add_argument("value")
++    scope.add_argument("--rules", required=True, type=Path)
++
++    detect = commands.add_parser("detect", help="SENTINEL — detect failed-login bursts")
++    detect.add_argument("auth", type=Path)
++    add_detection_options(detect)
++
++    traffic = commands.add_parser("traffic", help="GHOST VISION — summarize network flows")
++    traffic.add_argument("flows", type=Path)
++
++    hunt = commands.add_parser("hunt", help="PHANTOM HUNTER — correlate successful logins and network flows")
++    hunt.add_argument("auth", type=Path)
++    hunt.add_argument("flows", type=Path)
++    add_hunt_options(hunt)
++
++    explain = commands.add_parser("explain", help="KAGE CORE — explain failed-login alerts")
++    explain.add_argument("auth", type=Path)
++    add_detection_options(explain)
++
++    graph = commands.add_parser("map", help="SPECTER MAP — print an observed relationship graph")
++    graph.add_argument("auth", type=Path)
++    graph.add_argument("flows", type=Path)
++
++    headers = commands.add_parser("headers", help="SHADOW PROXY — inspect and redact saved HTTP headers")
++    headers.add_argument("path", type=Path)
++
++    investigate = commands.add_parser("investigate", help="RONIN SOC — run a case and export reports")
++    investigate.add_argument("folder", type=Path)
++    investigate.add_argument("--out", type=Path, default=Path("ghost-trace-case"))
++    add_hunt_options(investigate)
++
++    advise = commands.add_parser("advise", help="KAGE AI — suggest next steps from local evidence")
++    advise.add_argument("folder", type=Path)
++    add_hunt_options(advise)
++
++    demo = commands.add_parser("demo", help="run the bundled investigation offline")
++    demo.add_argument("--out", type=Path, default=Path("ghost-trace-demo"))
++    commands.add_parser("menu", help="open the interactive toolkit and API-key menu")
++    return parser
++
++
++def print_json(value):
++    print(json.dumps(value, indent=2))
++
++
++def run_command(args, session_keys):
++    command = args.command
++    if command == "ioc":
++        indicator = inspect_ioc(args.value)
++        if args.provider:
++            key = lookup_key(args.provider, session_keys)
++            indicator[args.provider] = enrich_indicator(indicator, args.provider, key)
++        print_json(indicator)
++        return int(bool(args.provider and indicator[args.provider]["status"] == "error"))
++    if command == "scope":
++        result = check_scope(args.value, load_scope(args.rules))
++        print_json(result)
++        return int(not result["in_scope"])
++    if command == "traffic":
++        print_json(summarize_traffic(load_flows(args.flows)))
++    elif command == "headers":
++        print_json(inspect_headers(args.path))
++    elif command == "map":
++        graph = observed_relationships(load_auth(args.auth), load_flows(args.flows))
++        print(render_mermaid(graph), end="")
++    elif command in {"detect", "explain", "hunt"}:
++        auth = load_auth(args.auth)
++        alerts = detect_failed_logins(auth, args.threshold, args.window)
++        if command == "detect":
++            print_json([alert_record(alert) for alert in alerts])
++        elif command == "explain":
++            print_json(explain_alerts(alerts))
++        else:
++            print_json(correlate(alerts, auth, load_flows(args.flows), args.hunt_window))
++    else:
++        if command == "demo":
++            case = build_case(DEMO_DIR)
++        else:
++            case = build_case(args.folder, args.threshold, args.window, args.hunt_window)
++        if command == "advise":
++            print_json(case["next_steps"])
++        else:
++            export_case(case, args.out)
++            print_json({
++                "output": str(args.out),
++                "alerts": len(case["alerts"]),
++                "correlated_logins": len(case["hunt"]["correlations"]),
++                "reports": ["case.md", "case.json", "relationships.mmd"],
++            })
++    return 0
++
++
++def execute_command(args, session_keys):
++    try:
++        return run_command(args, session_keys)
++    except (OSError, ValueError) as error:
++        print(f"ghost-trace: {error}", file=sys.stderr)
++        return 2
++
++
++def main(argv=None):
++    parser = build_parser()
++    args = parser.parse_args(argv)
++    if args.command == "menu":
++        def execute_menu_command(argv, session_keys):
++            return execute_command(parser.parse_args(argv), session_keys)
++
++        return run_menu(DEMO_DIR, execute_menu_command)
++    return execute_command(args, {})
+diff --git a/ghost-trace-lite/ghost_trace_lite/demo_data/auth.csv b/ghost-trace-lite/ghost_trace_lite/demo_data/auth.csv
+new file mode 100644
+index 0000000000000000000000000000000000000000..156a270325b592ae5a22c24cc1ebe343edef2ab7
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/demo_data/auth.csv
+@@ -0,0 +1,6 @@
++timestamp,user,host,host_ip,src_ip,outcome
++2026-01-15T14:00:00Z,analyst01,ws-17,10.0.0.17,192.0.2.44,failure
++2026-01-15T14:01:10Z,analyst01,ws-17,10.0.0.17,192.0.2.44,failure
++2026-01-15T14:02:30Z,analyst01,ws-17,10.0.0.17,192.0.2.44,failure
++2026-01-15T14:03:05Z,analyst01,ws-17,10.0.0.17,192.0.2.44,success
++2026-01-15T14:03:10Z,analyst02,ws-18,10.0.0.18,10.0.0.30,success
+diff --git a/ghost-trace-lite/ghost_trace_lite/demo_data/flows.csv b/ghost-trace-lite/ghost_trace_lite/demo_data/flows.csv
+new file mode 100644
+index 0000000000000000000000000000000000000000..a0164b27e621b1ff980902c2d6508fb965afdf10
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/demo_data/flows.csv
+@@ -0,0 +1,6 @@
++timestamp,src_ip,dst_ip,dst_port,protocol,bytes,dst_domain
++2026-01-15T14:02:00Z,10.0.0.17,203.0.113.11,443,tcp,300,portal.ronin.test
++2026-01-15T14:03:40Z,10.0.0.18,203.0.113.11,443,tcp,2800,portal.ronin.test
++2026-01-15T14:04:00Z,10.0.0.17,198.51.100.23,443,tcp,16384,updates.ronin.test
++2026-01-15T14:05:00Z,10.0.0.17,198.51.100.24,443,tcp,640,relay.unrelated.test
++2026-01-15T14:20:00Z,10.0.0.17,203.0.113.11,443,tcp,250,portal.ronin.test
+diff --git a/ghost-trace-lite/ghost_trace_lite/demo_data/headers.txt b/ghost-trace-lite/ghost_trace_lite/demo_data/headers.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..98e49cfb63d527abf68292a74e2eb0533d3cc379
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/demo_data/headers.txt
+@@ -0,0 +1,9 @@
++GET /download?token=synthetic-query-value HTTP/1.1
++Host: updates.ronin.test
++Authorization: Bearer synthetic-auth-value
++Cookie: session=synthetic-session-value
++Content-Type: application/json; boundary=synthetic-parameter-value
++X-Api-Key: synthetic-key-value
++User-Agent: SyntheticLab/1.0
++
++This body is outside the header block.
+diff --git a/ghost-trace-lite/ghost_trace_lite/demo_data/scope.txt b/ghost-trace-lite/ghost_trace_lite/demo_data/scope.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..e9af8809c41cbccf54b2f4c4df01cbce7e4bbe80
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/demo_data/scope.txt
+@@ -0,0 +1,3 @@
++# Fictional lab scope
++ronin.test
++*.ronin.test
+diff --git a/ghost-trace-lite/ghost_trace_lite/enrichment.py b/ghost-trace-lite/ghost_trace_lite/enrichment.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c65711b9e9cfa69c1db7db3eccc524113e33bd81
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/enrichment.py
+@@ -0,0 +1,62 @@
++"""Provider selection and concise reports for explicit public IOC lookups."""
++
++import os
++from urllib.parse import quote, urlencode
++from urllib.request import Request
++
++from .ghost_trace import is_public_indicator, request_report, validate_api_key, virustotal_lookup
++
++PROVIDERS = {
++    "virustotal": ("VirusTotal", "VT_API_KEY"),
++    "shodan": ("Shodan", "SHODAN_API_KEY"),
++    "otx": ("AlienVault OTX", "OTX_API_KEY"),
++}
++OTX_TYPES = {"ipv4": "IPv4", "ipv6": "IPv6", "domain": "domain"}
++
++
++def lookup_key(provider, session_keys):
++    return session_keys.get(provider) or os.getenv(PROVIDERS[provider][1], "")
++
++
++def shodan_summary(payload):
++    ports = payload["ports"]
++    if not isinstance(ports, list):
++        raise ValueError("expected a list of ports")
++    summary = {"ports": sorted({port for port in ports if type(port) is int and 0 <= port <= 65535})}
++    for field in ("org", "asn", "country_code", "last_update"):
++        value = payload.get(field)
++        if isinstance(value, str):
++            summary[field] = value[:160]
++    return summary
++
++
++def otx_summary(payload):
++    count = payload["pulse_info"]["count"]
++    if type(count) is not int or count < 0:
++        raise ValueError("expected a nonnegative pulse count")
++    return {"pulse_count": count}
++
++
++def enrich_indicator(ioc, provider, api_key):
++    if provider == "virustotal":
++        return virustotal_lookup(ioc, api_key)
++    if provider == "shodan" and ioc["type"] == "domain":
++        return {"status": "skipped", "message": "Shodan host lookup requires a public IP address."}
++    if not is_public_indicator(ioc):
++        return {"status": "skipped", "message": "Lookup requires a public indicator."}
++    name, env_var = PROVIDERS[provider]
++    try:
++        key = validate_api_key(api_key, env_var)
++    except ValueError as error:
++        return {"status": "error", "message": str(error)}
++
++    value = quote(ioc["value"], safe="")
++    headers = {"Accept": "application/json"}
++    if provider == "shodan":
++        query = urlencode({"key": key, "minify": "true"})
++        request = Request(f"https://api.shodan.io/shodan/host/{value}?{query}", headers=headers)
++        return request_report(request, name, shodan_summary)
++    indicator_type = OTX_TYPES[ioc["type"]]
++    url = f"https://otx.alienvault.com/api/v1/indicators/{indicator_type}/{value}/general"
++    request = Request(url, headers={**headers, "X-OTX-API-KEY": key})
++    return request_report(request, name, otx_summary)
+diff --git a/ghost-trace-lite/ghost_trace_lite/evidence.py b/ghost-trace-lite/ghost_trace_lite/evidence.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..faf8482b41e910d3d10868cbb51409d2d65517cc
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/evidence.py
+@@ -0,0 +1,141 @@
++"""Typed evidence and validation shared by the CSV analysis modules."""
++
++import csv
++import re
++from dataclasses import dataclass
++from datetime import datetime, timezone
++
++from .ghost_trace import normalize_domain, parse_ip
++
++AUTH_FIELDS = ("timestamp", "user", "host", "host_ip", "src_ip", "outcome")
++FLOW_FIELDS = ("timestamp", "src_ip", "dst_ip", "dst_port", "protocol", "bytes")
++IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}")
++
++
++@dataclass(frozen=True)
++class AuthEvent:
++    row: int
++    timestamp: datetime
++    user: str
++    host: str
++    host_ip: str
++    src_ip: str
++    outcome: str
++
++    @property
++    def evidence_id(self):
++        return f"auth:{self.row}"
++
++    @property
++    def login_key(self):
++        return self.user, self.host, self.host_ip, self.src_ip
++
++
++@dataclass(frozen=True)
++class FlowEvent:
++    row: int
++    timestamp: datetime
++    src_ip: str
++    dst_ip: str
++    dst_port: int
++    protocol: str
++    bytes: int
++    dst_domain: str
++
++    @property
++    def evidence_id(self):
++        return f"flow:{self.row}"
++
++
++def clean_identifier(value, field):
++    if not IDENTIFIER.fullmatch(value):
++        raise ValueError(f"{field} must be 1–128 letters, digits, or . _ @ - and start alphanumeric")
++    return value
++
++
++def utc_timestamp(value):
++    try:
++        if "T" not in value and " " not in value:
++            raise ValueError
++        result = datetime.fromisoformat(value)
++        if result.utcoffset() is None:
++            raise ValueError
++        return result.astimezone(timezone.utc)
++    except (ValueError, OverflowError):
++        raise ValueError("timestamp must be ISO 8601 with an explicit UTC offset or Z") from None
++
++
++def auth_event(row, values):
++    outcome = values["outcome"].lower()
++    if outcome not in {"success", "failure"}:
++        raise ValueError("outcome must be success or failure")
++    return AuthEvent(
++        row=row,
++        timestamp=utc_timestamp(values["timestamp"]),
++        user=clean_identifier(values["user"], "user"),
++        host=clean_identifier(values["host"], "host"),
++        host_ip=str(parse_ip(values["host_ip"])),
++        src_ip=str(parse_ip(values["src_ip"])),
++        outcome=outcome,
++    )
++
++
++def flow_event(row, values):
++    try:
++        port = int(values["dst_port"])
++        size = int(values["bytes"])
++    except ValueError:
++        raise ValueError("dst_port and bytes must be integers") from None
++    if not 0 <= port <= 65535 or size < 0:
++        raise ValueError("dst_port must be 0–65535 and bytes must be nonnegative")
++    protocol = values["protocol"].lower()
++    if protocol not in {"tcp", "udp"}:
++        raise ValueError("protocol must be tcp or udp")
++    domain = values.get("dst_domain", "")
++    return FlowEvent(
++        row=row,
++        timestamp=utc_timestamp(values["timestamp"]),
++        src_ip=str(parse_ip(values["src_ip"])),
++        dst_ip=str(parse_ip(values["dst_ip"])),
++        dst_port=port,
++        protocol=protocol,
++        bytes=size,
++        dst_domain=normalize_domain(domain) if domain else "",
++    )
++
++
++def read_events(path, required_fields, parse_event):
++    events = []
++    with path.open(encoding="utf-8-sig", newline="") as source:
++        reader = csv.reader(source, strict=True)
++        try:
++            fields = next(reader, [])
++            missing = set(required_fields).difference(fields)
++            if missing:
++                raise ValueError(f"{path.name}: missing columns {', '.join(sorted(missing))}")
++            if len(fields) != len(set(fields)):
++                raise ValueError(f"{path.name}: duplicate column names")
++            while True:
++                row = reader.line_num + 1
++                cells = next(reader, None)
++                if cells is None:
++                    break
++                if not cells:
++                    continue
++                if len(cells) != len(fields):
++                    raise ValueError(f"{path.name}:{row}: unexpected number of columns")
++                try:
++                    events.append(parse_event(row, dict(zip(fields, map(str.strip, cells)))))
++                except ValueError as error:
++                    raise ValueError(f"{path.name}:{row}: {error}") from None
++        except csv.Error as error:
++            raise ValueError(f"{path.name}:{reader.line_num}: malformed CSV ({error})") from None
++    return sorted(events, key=lambda event: (event.timestamp, event.row))
++
++
++def load_auth(path):
++    return read_events(path, AUTH_FIELDS, auth_event)
++
++
++def load_flows(path):
++    return read_events(path, FLOW_FIELDS, flow_event)
+diff --git a/ghost-trace-lite/ghost_trace_lite/ghost_trace.py b/ghost-trace-lite/ghost_trace_lite/ghost_trace.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..d77452b199f8ee4e0139bcea923622f1253f8180
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/ghost_trace.py
+@@ -0,0 +1,144 @@
++"""IOC syntax validation, IP classification, and opt-in VirusTotal enrichment."""
++
++import ipaddress
++import json
++import re
++from http.client import HTTPException
++from urllib.error import HTTPError, URLError
++from urllib.parse import quote
++from urllib.request import HTTPRedirectHandler, Request, build_opener
++
++LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
++PRIVATE_V4 = tuple(map(ipaddress.ip_network, ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")))
++UNIQUE_LOCAL = ipaddress.ip_network("fc00::/7")
++SHARED = ipaddress.ip_network("100.64.0.0/10")
++DOCUMENTATION = tuple(map(ipaddress.ip_network, (
++    "192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32", "3fff::/20",
++)))
++LOCAL_DOMAIN_SUFFIXES = (
++    "localhost", "local", "internal", "test", "invalid", "example", "onion",
++    "example.com", "example.net", "example.org",
++)
++MAX_RESPONSE_BYTES = 1024 * 1024
++
++
++def normalize_domain(value):
++    domain = value.strip().removesuffix(".")
++    labels = domain.split(".")
++    if (
++        len(domain) > 253
++        or len(labels) < 2
++        or labels[-1].isdigit()
++        or any(not LABEL.fullmatch(label) for label in labels)
++    ):
++        raise ValueError("expected a dotted ASCII hostname (use Punycode for IDNs)")
++    return domain.lower()
++
++
++def parse_ip(value):
++    if "%" in value:
++        raise ValueError("IPv6 zone identifiers are unsupported")
++    return ipaddress.ip_address(value.strip())
++
++
++def ip_scope(address):
++    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
++        address = address.ipv4_mapped
++    if address.is_unspecified:
++        return "unspecified"
++    if address.is_loopback:
++        return "loopback"
++    if address.is_link_local:
++        return "link_local"
++    if address.is_multicast:
++        return "multicast"
++    if any(address in network for network in DOCUMENTATION):
++        return "documentation"
++    if address in SHARED:
++        return "shared_address_space"
++    if address in UNIQUE_LOCAL or any(address in network for network in PRIVATE_V4):
++        return "private"
++    if address.is_global and not address.is_reserved:
++        return "public"
++    return "special_use"
++
++
++def inspect_ioc(value):
++    try:
++        address = parse_ip(value)
++    except ValueError:
++        return {"value": normalize_domain(value), "type": "domain"}
++    return {"value": str(address), "type": f"ipv{address.version}", "scope": ip_scope(address)}
++
++
++class NoRedirect(HTTPRedirectHandler):
++    """Keep the API key on the original HTTPS origin."""
++
++    def redirect_request(self, req, fp, code, msg, headers, newurl):
++        return None
++
++
++def is_public_indicator(ioc):
++    if ioc["type"] != "domain":
++        return ioc["scope"] == "public"
++    value = ioc["value"]
++    return all(
++        value != suffix and not value.endswith("." + suffix)
++        for suffix in LOCAL_DOMAIN_SUFFIXES
++    )
++
++
++def validate_api_key(api_key, env_var):
++    key = (api_key or "").strip()
++    if not key:
++        raise ValueError(f"Enter an API key in the menu or set {env_var}.")
++    if not key.isascii() or any(not 33 <= ord(char) <= 126 for char in key):
++        raise ValueError("The API key must contain only visible ASCII characters without spaces.")
++    return key
++
++
++def request_report(request, provider, summarize):
++    try:
++        with build_opener(NoRedirect()).open(request, timeout=10) as response:
++            raw = response.read(MAX_RESPONSE_BYTES + 1)
++        if len(raw) > MAX_RESPONSE_BYTES:
++            return {"status": "error", "message": f"{provider} response exceeded the size limit."}
++        return {"status": "ok", **summarize(json.loads(raw))}
++    except HTTPError as error:
++        code = error.code
++        error.close()
++        if code == 404:
++            return {"status": "not_found", "message": f"{provider} has no report for this indicator."}
++        messages = {
++            401: f"{provider} rejected the API key.",
++            403: f"{provider} denied access. Check the key and account permissions.",
++            429: f"{provider} rate limit reached. Try again later.",
++        }
++        return {"status": "error", "message": messages.get(code, f"{provider} returned HTTP {code}.")}
++    except (URLError, OSError, HTTPException):
++        return {"status": "error", "message": f"{provider} could not be reached."}
++    except (AttributeError, KeyError, TypeError, ValueError, RecursionError):
++        return {"status": "error", "message": f"{provider} returned an unexpected response."}
++
++
++def virustotal_summary(payload):
++    stats = payload["data"]["attributes"].get("last_analysis_stats", {})
++    if not isinstance(stats, dict):
++        raise ValueError("expected an object for last_analysis_stats")
++    return {"last_analysis_stats": {
++        key: stats[key] for key in ("malicious", "suspicious", "harmless", "undetected", "timeout")
++        if key in stats and type(stats[key]) is int and stats[key] >= 0
++    }}
++
++
++def virustotal_lookup(ioc, api_key):
++    if not is_public_indicator(ioc):
++        return {"status": "skipped", "message": "Lookup requires a public indicator."}
++    try:
++        key = validate_api_key(api_key, "VT_API_KEY")
++    except ValueError as error:
++        return {"status": "error", "message": str(error)}
++    endpoint = "domains" if ioc["type"] == "domain" else "ip_addresses"
++    url = f"https://www.virustotal.com/api/v3/{endpoint}/{quote(ioc['value'], safe='')}"
++    request = Request(url, headers={"Accept": "application/json", "x-apikey": key})
++    return request_report(request, "VirusTotal", virustotal_summary)
+diff --git a/ghost-trace-lite/ghost_trace_lite/ghost_vision.py b/ghost-trace-lite/ghost_trace_lite/ghost_vision.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..614fd4c1909b443717c75a844f7a6598702b9b71
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/ghost_vision.py
+@@ -0,0 +1,25 @@
++"""Summarize network flow counts and bytes from a local CSV."""
++
++from collections import Counter
++
++
++def summarize_traffic(flows):
++    talkers = Counter()
++    ports = Counter()
++    total = 0
++    for flow in flows:
++        talkers[flow.src_ip] += flow.bytes
++        ports[(flow.protocol, flow.dst_port)] += 1
++        total += flow.bytes
++    return {
++        "flow_count": len(flows),
++        "total_bytes": total,
++        "top_sources": [
++            {"ip": ip, "bytes": size}
++            for ip, size in sorted(talkers.items(), key=lambda item: (-item[1], item[0]))[:5]
++        ],
++        "top_destination_ports": [
++            {"protocol": proto, "port": port, "flows": count}
++            for (proto, port), count in sorted(ports.items(), key=lambda item: (-item[1], item[0]))[:5]
++        ],
++    }
+diff --git a/ghost-trace-lite/ghost_trace_lite/kage_ai.py b/ghost-trace-lite/ghost_trace_lite/kage_ai.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a84be1f1dafbf1ab76b6b4b5fb9703c1d5c6658
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/kage_ai.py
+@@ -0,0 +1,51 @@
++"""Suggest evidence-based next steps with local rules."""
++
++from .ghost_trace import ip_scope, parse_ip
++
++
++def advise_case(case):
++    recommendations = []
++    if case["alerts"]:
++        recommendations.append({
++            "action": "Check MFA, device identity, and expected user activity for the affected logins.",
++            "evidence_ids": [evidence_id for alert in case["alerts"] for evidence_id in alert["evidence_ids"]],
++        })
++    follow_ups = case["hunt"]["correlations"]
++    if follow_ups:
++        recommendations.append({
++            "action": "Review identity and endpoint logs around the successful login. Verify whether the login was expected.",
++            "evidence_ids": [link["success_evidence_id"] for link in follow_ups],
++        })
++    correlated_flows = [
++        evidence_id for link in follow_ups for evidence_id in link["flow_evidence_ids"]
++    ]
++    if correlated_flows:
++        recommendations.append({
++            "action": "Use endpoint telemetry to identify the process behind the associated flows. Compare the destinations with the host baseline.",
++            "evidence_ids": list(dict.fromkeys(correlated_flows)),
++        })
++    outside = [
++        result["domain"] for result in case["scope_checks"] if not result["in_scope"]
++    ]
++    if outside:
++        recommendations.append({
++            "action": "Keep the listed domains outside active testing unless the authorized scope changes.",
++            "domains": outside,
++            "evidence_ids": [],
++        })
++    if not case["alerts"]:
++        recommendations.append({
++            "action": "Check authentication log coverage and test the detection threshold against a known-good baseline.",
++            "evidence_ids": [],
++        })
++    public_destinations = sorted({
++        event["destination_ip"] for event in case["hunt"]["timeline"]
++        if event["type"] == "network_flow" and ip_scope(parse_ip(event["destination_ip"])) == "public"
++    })
++    if public_destinations:
++        recommendations.append({
++            "action": "Review public destination reputation using approved sources.",
++            "indicators": public_destinations,
++            "evidence_ids": [],
++        })
++    return recommendations
+diff --git a/ghost-trace-lite/ghost_trace_lite/kage_core.py b/ghost-trace-lite/ghost_trace_lite/kage_core.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..51f4f6642d01a81746c84e0e980eacdb2f896d3e
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/kage_core.py
+@@ -0,0 +1,21 @@
++"""Explain alerts from rule inputs and source evidence."""
++
++from .sentinel import alert_record
++
++
++def explain_alerts(alerts):
++    explanations = []
++    for alert in alerts:
++        record = alert_record(alert)
++        summary = (
++            f"{record['failure_count']} failed logins for {record['user']} on "
++            f"{record['host']} from {record['source_ip']} within "
++            f"{record['window_minutes']} minutes."
++        )
++        explanations.append({
++            "alert_id": record["id"],
++            "summary": summary,
++            "evidence_ids": record["evidence_ids"],
++            "limitation": "A failed-login burst is a triage signal. Corroborate it with identity and endpoint logs.",
++        })
++    return explanations
+diff --git a/ghost-trace-lite/ghost_trace_lite/menu.py b/ghost-trace-lite/ghost_trace_lite/menu.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..140cf3607f7bdb156dcd2d284d85094d5983f303
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/menu.py
+@@ -0,0 +1,144 @@
++"""Interactive prompts for the existing CLI commands and in-memory API keys."""
++
++import getpass
++import warnings
++
++from .enrichment import PROVIDERS, lookup_key
++from .ghost_trace import validate_api_key
++
++TOOLS = {
++    "1": ("GHOST TRACE", "IOC validation and enrichment", "ioc"),
++    "2": ("SHADOW RECON", "Check authorized scope", "scope"),
++    "3": ("SENTINEL", "Detect failed logins", "detect"),
++    "4": ("GHOST VISION", "Summarize network traffic", "traffic"),
++    "5": ("PHANTOM HUNTER", "Correlate login and network evidence", "hunt"),
++    "6": ("KAGE CORE", "Explain alerts", "explain"),
++    "7": ("SPECTER MAP", "Build a Mermaid graph", "map"),
++    "8": ("SHADOW PROXY", "Inspect and redact HTTP headers", "headers"),
++    "9": ("RONIN SOC", "Investigate and export a case", "investigate"),
++    "10": ("KAGE AI", "Suggest next investigation steps", "advise"),
++}
++PROVIDER_CHOICES = {str(number): provider for number, provider in enumerate(PROVIDERS, start=1)}
++
++
++def prompt(text, default=""):
++    suffix = f" [{default}]" if default else ""
++    return input(f"{text}{suffix}: ").strip() or default
++
++
++def path_prompt(text, default=""):
++    value = prompt(text, default)
++    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
++        value = value[1:-1]
++    return value or default
++
++
++def sample_path(label, demo_dir, filename=""):
++    value = path_prompt(f"{label} (Enter for bundled sample)")
++    return value or str(demo_dir / filename)
++
++
++def choose_provider(session_keys, zero_label):
++    print(f"  0. {zero_label}")
++    for number, provider in PROVIDER_CHOICES.items():
++        name, env_var = PROVIDERS[provider]
++        source = "session key" if provider in session_keys else f"from {env_var}"
++        status = source if lookup_key(provider, session_keys).strip() else "key needed"
++        print(f"  {number}. {name} [{status}]")
++    choice = prompt("Provider", "0")
++    while choice != "0" and choice not in PROVIDER_CHOICES:
++        print("Choose one of the listed numbers.")
++        choice = prompt("Provider", "0")
++    return PROVIDER_CHOICES.get(choice)
++
++
++def manage_keys(session_keys):
++    provider = choose_provider(session_keys, "Back to menu")
++    if not provider:
++        return
++    name, env_var = PROVIDERS[provider]
++    action = prompt(f"{name}: set session key [s], clear session key [c], or back [Enter]").lower()
++    if action == "c":
++        session_keys.pop(provider, None)
++        print(f"Session key cleared. The menu can still use {env_var} if it is set.")
++    elif action == "s":
++        try:
++            with warnings.catch_warnings():
++                warnings.simplefilter("error", getpass.GetPassWarning)
++                key = getpass.getpass(f"{name} API key (hidden): ").strip()
++            if not key:
++                return
++            session_keys[provider] = validate_api_key(key, env_var)
++        except (getpass.GetPassWarning, OSError):
++            print("Masked entry is unavailable here. Use a terminal or set the environment variable.")
++        except ValueError as error:
++            print(error)
++        else:
++            print(f"{name} key set for this session.")
++
++
++def command_arguments(command, demo_dir, session_keys):
++    if command == "ioc":
++        value = prompt("IP address or domain")
++        if not value:
++            return None
++        provider = choose_provider(session_keys, "Offline classification")
++        if provider is None:
++            return ["ioc", "--", value]
++        name = PROVIDERS[provider][0]
++        if prompt(f"Send this public, non-sensitive indicator to {name}? [y/N]").lower() == "y":
++            return ["ioc", "--provider", provider, "--", value]
++        return None
++    if command == "scope":
++        value = prompt("Domain")
++        if not value:
++            return None
++        rules = sample_path("Scope rules file", demo_dir, "scope.txt")
++        return ["scope", f"--rules={rules}", "--", value]
++    if command in {"detect", "explain", "hunt", "map"}:
++        auth = sample_path("Authentication CSV", demo_dir, "auth.csv")
++        if command in {"hunt", "map"}:
++            flows = sample_path("Network flows CSV", demo_dir, "flows.csv")
++            return [command, "--", auth, flows]
++        return [command, "--", auth]
++    if command == "traffic":
++        return [command, "--", sample_path("Network flows CSV", demo_dir, "flows.csv")]
++    if command == "headers":
++        return [command, "--", sample_path("Saved HTTP headers file", demo_dir, "headers.txt")]
++    if command == "demo":
++        return [command, f"--out={path_prompt('Output folder', 'ghost-trace-demo')}"]
++    folder = sample_path("Evidence directory", demo_dir)
++    if command == "investigate":
++        output = path_prompt("Output folder", "ghost-trace-case")
++        return [command, f"--out={output}", "--", folder]
++    return [command, "--", folder]
++
++
++def run_menu(demo_dir, execute):
++    session_keys = {}
++    while True:
++        print("\nGHOST TRACE Lite")
++        for number, (name, description, _) in TOOLS.items():
++            print(f"  {number:>2}. {name} | {description}")
++        print("  11. Run the offline demo")
++        print("  12. Manage enrichment API keys")
++        print("   0. Exit")
++        try:
++            choice = prompt("Select an option")
++            if choice == "0":
++                return 0
++            if choice == "12":
++                manage_keys(session_keys)
++            elif choice in TOOLS or choice == "11":
++                command = "demo" if choice == "11" else TOOLS[choice][2]
++                args = command_arguments(command, demo_dir, session_keys)
++                if args:
++                    execute(args, session_keys)
++            else:
++                print("Choose one of the listed numbers.")
++        except EOFError:
++            print()
++            return 0
++        except KeyboardInterrupt:
++            print("\nCancelled.")
++            return 130
+diff --git a/ghost-trace-lite/ghost_trace_lite/phantom_hunter.py b/ghost-trace-lite/ghost_trace_lite/phantom_hunter.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0eb74f7f077dc9c2fe9a334295b417984678a14a
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/phantom_hunter.py
+@@ -0,0 +1,76 @@
++"""Link alerts to subsequent successful logins and nearby host traffic."""
++
++from bisect import bisect_right
++from collections import defaultdict
++from datetime import timedelta
++
++
++def auth_record(event):
++    return {
++        "id": event.evidence_id,
++        "timestamp": event.timestamp.isoformat(),
++        "type": f"login_{event.outcome}",
++        "user": event.user,
++        "host": event.host,
++        "host_ip": event.host_ip,
++        "source_ip": event.src_ip,
++    }
++
++
++def flow_record(flow):
++    return {
++        "id": flow.evidence_id,
++        "timestamp": flow.timestamp.isoformat(),
++        "type": "network_flow",
++        "source_ip": flow.src_ip,
++        "destination_ip": flow.dst_ip,
++        "destination_port": flow.dst_port,
++        "destination_domain": flow.dst_domain or None,
++        "protocol": flow.protocol,
++        "bytes": flow.bytes,
++    }
++
++
++def correlate(alerts, auth, flows, window_minutes=10):
++    window = timedelta(minutes=window_minutes)
++    successes_by_key = defaultdict(list)
++    flows_by_source = defaultdict(list)
++    for event in auth:
++        if event.outcome == "success":
++            successes_by_key[event.login_key].append(event)
++    for flow in flows:
++        flows_by_source[flow.src_ip].append(flow)
++
++    # When bursts share a success, use the closest preceding burst for that login.
++    by_success = {}
++    for alert in alerts:
++        trigger = alert.trigger
++        successes = successes_by_key[trigger.login_key]
++        index = bisect_right(successes, (trigger.timestamp, trigger.row),
++                             key=lambda event: (event.timestamp, event.row))
++        if index < len(successes):
++            success = successes[index]
++            if success.timestamp - trigger.timestamp <= window:
++                by_success[success] = alert
++
++    correlations = []
++    timeline = {}
++    for success, alert in sorted(by_success.items(), key=lambda pair: (pair[0].timestamp, pair[0].row)):
++        candidates = flows_by_source[success.host_ip]
++        start = bisect_right(candidates, success.timestamp, key=lambda flow: flow.timestamp)
++        stop = bisect_right(candidates, window, key=lambda flow: flow.timestamp - success.timestamp)
++        related_flows = candidates[start:stop]
++        correlations.append({
++            "alert_id": alert.alert_id,
++            "success_evidence_id": success.evidence_id,
++            "flow_evidence_ids": [flow.evidence_id for flow in related_flows],
++        })
++        for event in (*alert.failures, success):
++            timeline[event.evidence_id] = auth_record(event)
++        for flow in related_flows:
++            timeline[flow.evidence_id] = flow_record(flow)
++    return {
++        "window_minutes": window_minutes,
++        "correlations": correlations,
++        "timeline": sorted(timeline.values(), key=lambda event: event["timestamp"]),
++    }
+diff --git a/ghost-trace-lite/ghost_trace_lite/ronin_soc.py b/ghost-trace-lite/ghost_trace_lite/ronin_soc.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..1132b6fcd50f862d229ff338b577309da39b5f4f
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/ronin_soc.py
+@@ -0,0 +1,142 @@
++"""Run the investigation and export a shared case as JSON, Markdown, and Mermaid."""
++
++import json
++from contextlib import suppress
++from pathlib import Path
++
++from .evidence import load_auth, load_flows
++from .ghost_trace import inspect_ioc
++from .ghost_vision import summarize_traffic
++from .kage_ai import advise_case
++from .kage_core import explain_alerts
++from .phantom_hunter import correlate
++from .sentinel import alert_record, detect_failed_logins
++from .shadow_proxy import inspect_headers
++from .shadow_recon import check_scope, load_scope
++from .specter_map import observed_relationships, render_mermaid
++
++
++def build_case(folder, threshold=3, detection_window=5, hunt_window=10):
++    auth = load_auth(folder / "auth.csv")
++    flows = load_flows(folder / "flows.csv")
++    headers = inspect_headers(folder / "headers.txt")
++    rules = load_scope(folder / "scope.txt")
++
++    ips = {ip for event in auth for ip in (event.src_ip, event.host_ip)}
++    ips.update(ip for flow in flows for ip in (flow.src_ip, flow.dst_ip))
++    domains = {flow.dst_domain for flow in flows if flow.dst_domain}
++    alerts = detect_failed_logins(auth, threshold, detection_window)
++
++    case = {
++        "schema_version": 1,
++        "inputs": {"authentication_events": len(auth), "network_flows": len(flows)},
++        "indicators": [inspect_ioc(value) for value in sorted(ips | domains)],
++        "scope_checks": [check_scope(domain, rules) for domain in sorted(domains)],
++        "detection_settings": {"threshold": threshold, "window_minutes": detection_window},
++        "alerts": [alert_record(alert) for alert in alerts],
++        "explanations": explain_alerts(alerts),
++        "traffic": summarize_traffic(flows),
++        "hunt": correlate(alerts, auth, flows, hunt_window),
++        "headers": headers,
++        "relationships": observed_relationships(auth, flows),
++    }
++    case["next_steps"] = advise_case(case)
++    return case
++
++
++def markdown_report(case, graph):
++    hunt = case["hunt"]
++    lines = [
++        "# GHOST TRACE Lite case report", "",
++        f"Reviewed {case['inputs']['authentication_events']} authentication events and "
++        f"{case['inputs']['network_flows']} network flows.", "",
++        f"Failed-login bursts **{len(case['alerts'])}** · "
++        f"Correlated successful logins **{len(hunt['correlations'])}**", "",
++        "## Detection", "",
++    ]
++    for explanation in case["explanations"]:
++        evidence = ", ".join(explanation["evidence_ids"])
++        lines.append(f"- **{explanation['alert_id']}**. {explanation['summary']} See {evidence}.")
++    if not case["explanations"]:
++        lines.append("No failed-login burst met the configured threshold.")
++    lines.extend([
++        "",
++        "## Correlated timeline (UTC)", "",
++        "Timing and a shared host IP identify leads for review. Confirm the activity with other evidence.",
++        "",
++    ])
++    if hunt["timeline"]:
++        lines.extend(["| UTC timestamp | Evidence | Observation |", "| --- | --- | --- |"])
++        for event in hunt["timeline"]:
++            if event["type"] == "network_flow":
++                destination = event["destination_ip"]
++                if event["destination_domain"]:
++                    destination += f" ({event['destination_domain']})"
++                details = (
++                    f"`{event['source_ip']}` to `{destination}` over "
++                    f"{event['protocol'].upper()} port {event['destination_port']} ({event['bytes']:,} bytes)"
++                )
++            else:
++                outcome = event["type"].removeprefix("login_")
++                details = f"Login {outcome} for `{event['user']}` on `{event['host']}` from `{event['source_ip']}`"
++            lines.append(f"| {event['timestamp']} | `{event['id']}` | {details} |")
++    else:
++        lines.append("No matching successful login followed an alert within the configured window.")
++
++    lines.extend(["", "## Network and indicators", ""])
++    lines.append(f"The captured flows account for **{case['traffic']['total_bytes']:,} bytes**.")
++    if case["traffic"]["top_sources"]:
++        sources = ", ".join(
++            f"`{source['ip']}` ({source['bytes']:,} bytes)" for source in case["traffic"]["top_sources"]
++        )
++        lines.extend(["", f"The highest-volume sources were {sources}."])
++    lines.append("")
++    for ioc in case["indicators"]:
++        lines.append(f"- `{ioc['value']}` ({ioc.get('scope', 'domain')})")
++    if not case["indicators"]:
++        lines.append("No IP addresses or domains were present in the input CSVs.")
++
++    lines.extend(["", "## Scope checks", ""])
++    for check in case["scope_checks"]:
++        status = "in scope" if check["in_scope"] else "out of scope"
++        lines.append(f"- `{check['domain']}` — {status}")
++    if not case["scope_checks"]:
++        lines.append("No destination domains were available for scope checking.")
++
++    lines.extend([
++        "", "## HTTP evidence", "",
++        f"Read {len(case['headers']['headers'])} headers. Redacted {case['headers']['redacted_count']} values.",
++        "The sanitized headers are in `case.json`.",
++        "", "## Next steps", "",
++    ])
++    for step in case["next_steps"]:
++        evidence = ", ".join(step["evidence_ids"])
++        suffix = f" See {evidence}." if evidence else ""
++        lines.append(f"- {step['action']}{suffix}")
++    lines.extend([
++        "", "## Observed relationships", "",
++        "The graph shows observed links across the input evidence.", "",
++        "```mermaid", graph.rstrip(), "```", "",
++    ])
++    return "\n".join(lines)
++
++
++def export_case(case, output: Path):
++    # Prepare all content before claiming the output directory.
++    graph = render_mermaid(case["relationships"])
++    files = {
++        "case.json": json.dumps(case, indent=2) + "\n",
++        "case.md": markdown_report(case, graph),
++        "relationships.mmd": graph,
++    }
++    output.mkdir(parents=True, exist_ok=False)
++    try:
++        for name, contents in files.items():
++            (output / name).write_text(contents, encoding="utf-8", newline="\n")
++    except (OSError, KeyboardInterrupt):
++        for name in files:
++            with suppress(OSError):
++                (output / name).unlink(missing_ok=True)
++        with suppress(OSError):
++            output.rmdir()
++        raise
+diff --git a/ghost-trace-lite/ghost_trace_lite/sentinel.py b/ghost-trace-lite/ghost_trace_lite/sentinel.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..96867da9904b86eb370a3f2eb20efe48656eadb5
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/sentinel.py
+@@ -0,0 +1,57 @@
++"""Detect bursts of failed logins for one user, target host, and source IP."""
++
++from collections import defaultdict, deque
++from dataclasses import dataclass
++from datetime import timedelta
++
++from .evidence import AuthEvent
++
++
++@dataclass(frozen=True)
++class Alert:
++    failures: tuple[AuthEvent, ...]
++    window_minutes: int
++
++    @property
++    def trigger(self):
++        return self.failures[-1]
++
++    @property
++    def alert_id(self):
++        return f"failed-logins:{self.trigger.row}"
++
++
++def detect_failed_logins(events, threshold=3, window_minutes=5):
++    window = timedelta(minutes=window_minutes)
++    pending = defaultdict(deque)
++    alerts = []
++    for event in events:
++        key = event.login_key
++        if event.outcome == "success":
++            pending.pop(key, None)
++            continue
++        failures = pending[key]
++        while failures and event.timestamp - failures[0].timestamp > window:
++            failures.popleft()
++        failures.append(event)
++        if len(failures) == threshold:
++            alerts.append(Alert(tuple(failures), window_minutes))
++            del pending[key]
++    return alerts
++
++
++def alert_record(alert):
++    event = alert.trigger
++    return {
++        "id": alert.alert_id,
++        "rule": "repeated_failed_logins",
++        "user": event.user,
++        "host": event.host,
++        "host_ip": event.host_ip,
++        "source_ip": event.src_ip,
++        "first_failure": alert.failures[0].timestamp.isoformat(),
++        "triggered_at": event.timestamp.isoformat(),
++        "failure_count": len(alert.failures),
++        "window_minutes": alert.window_minutes,
++        "evidence_ids": [failure.evidence_id for failure in alert.failures],
++    }
+diff --git a/ghost-trace-lite/ghost_trace_lite/shadow_proxy.py b/ghost-trace-lite/ghost_trace_lite/shadow_proxy.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..93524624c14b9d17781d3e03b05aebe1f50698a2
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/shadow_proxy.py
+@@ -0,0 +1,65 @@
++"""Inspect one saved HTTP request header block with conservative redaction."""
++
++import ipaddress
++import re
++
++from .ghost_trace import normalize_domain
++
++TOKEN = r"[!#$%&'*+.^_`|~0-9A-Za-z-]+"
++HEADER_NAME = re.compile(TOKEN)
++MEDIA_TYPE = re.compile(rf"{TOKEN}/{TOKEN}")
++REQUEST_LINE = re.compile(r"([A-Z]{1,24}) [^\s]+ HTTP/(?:1\.0|1\.1|2(?:\.0)?|3(?:\.0)?)")
++HOST = re.compile(r"(\[[0-9a-fA-F:.]+\]|[0-9a-zA-Z.-]+)(?::([0-9]{1,5}))?")
++REDACTED = "[redacted]"
++
++
++def safe_host(value):
++    match = HOST.fullmatch(value)
++    if not match:
++        return REDACTED
++    host, port = match.groups()
++    if port and not 1 <= int(port) <= 65535:
++        return REDACTED
++    try:
++        if host.startswith("["):
++            host = f"[{ipaddress.IPv6Address(host[1:-1])}]"
++        else:
++            try:
++                host = str(ipaddress.IPv4Address(host))
++            except ValueError:
++                host = normalize_domain(host)
++    except ValueError:
++        return REDACTED
++    return f"{host}:{int(port)}" if port else host
++
++
++def inspect_headers(path):
++    method = None
++    headers = []
++    with path.open(encoding="utf-8-sig", newline=None) as source:
++        for row, raw_line in enumerate(source, start=1):
++            line = raw_line.rstrip("\r\n")
++            if not line:
++                break
++            request = REQUEST_LINE.fullmatch(line) if row == 1 else None
++            if request:
++                method = request[1]
++                continue
++            name, separator, value = line.partition(":")
++            if not separator or not HEADER_NAME.fullmatch(name):
++                raise ValueError(f"{path.name}:{row}: expected a header name and colon")
++            name = name.lower()
++            value = value.strip()
++            safe_value = REDACTED
++            if name == "host":
++                safe_value = safe_host(value)
++            elif name == "content-type":
++                media_type = value.split(";", 1)[0].strip().lower()
++                if MEDIA_TYPE.fullmatch(media_type):
++                    safe_value = media_type
++            headers.append({"name": name, "value": safe_value})
++    return {
++        "method": method,
++        "headers": headers,
++        "redacted_count": sum(header["value"] == REDACTED for header in headers),
++    }
+diff --git a/ghost-trace-lite/ghost_trace_lite/shadow_recon.py b/ghost-trace-lite/ghost_trace_lite/shadow_recon.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea8bf1456437d4e0cdf9941995de47c0c507d9b7
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/shadow_recon.py
+@@ -0,0 +1,27 @@
++"""Check a hostname against explicit exact and wildcard scope rules."""
++
++from .ghost_trace import normalize_domain
++
++
++def load_scope(path):
++    rules = set()
++    for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
++        rule = line.split("#", 1)[0].strip()
++        if not rule:
++            continue
++        wildcard = rule.startswith("*.")
++        try:
++            domain = normalize_domain(rule.removeprefix("*."))
++        except ValueError as error:
++            raise ValueError(f"{path.name}:{line_number}: invalid scope rule") from error
++        rules.add(f"*.{domain}" if wildcard else domain)
++    return sorted(rules)
++
++
++def check_scope(value, rules):
++    domain = normalize_domain(value)
++    matches = [
++        rule for rule in rules
++        if (domain.endswith(rule[1:]) if rule.startswith("*.") else domain == rule)
++    ]
++    return {"domain": domain, "in_scope": bool(matches), "matched_rules": matches}
+diff --git a/ghost-trace-lite/ghost_trace_lite/specter_map.py b/ghost-trace-lite/ghost_trace_lite/specter_map.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..33e2871f17447439b9ed047f339b5fc91e3fba0a
+--- /dev/null
++++ b/ghost-trace-lite/ghost_trace_lite/specter_map.py
+@@ -0,0 +1,47 @@
++"""Build observed entity relationships and render a Mermaid diagram."""
++
++
++def observed_relationships(auth, flows):
++    edges = set()
++    for event in auth:
++        edges.add(("user", event.user, "login target", "host", event.host))
++        edges.add(("ip", event.src_ip, "login source", "host", event.host))
++        edges.add(("host", event.host, "reported address", "ip", event.host_ip))
++    for flow in flows:
++        edges.add(("ip", flow.src_ip, "connected to", "ip", flow.dst_ip))
++        if flow.dst_domain:
++            edges.add(("ip", flow.dst_ip, "observed destination", "domain", flow.dst_domain))
++    return [
++        {"source": {"type": left, "value": source}, "relation": relation,
++         "target": {"type": right, "value": target}}
++        for left, source, relation, right, target in sorted(edges)
++    ]
++
++
++def mermaid_label(value):
++    # Mermaid decimal entities protect labels from syntax and HTML interpretation.
++    return "".join(
++        char if char.isascii() and (char.isalnum() or char in " ._@:-") else f"#{ord(char)};"
++        for char in value
++    )
++
++
++def render_mermaid(relationships):
++    lines = ["flowchart TD"]
++    nodes = {}
++
++    def node_id(entity):
++        key = entity["type"], entity["value"]
++        if key not in nodes:
++            nodes[key] = f"n{len(nodes) + 1}"
++            label = mermaid_label(f"{key[0]}: {key[1]}")
++            lines.append(f'    {nodes[key]}["{label}"]')
++        return nodes[key]
++
++    for edge in relationships:
++        source = node_id(edge["source"])
++        target = node_id(edge["target"])
++        lines.append(f"    {source} -->|{mermaid_label(edge['relation'])}| {target}")
++    if not relationships:
++        lines.append('    n1["No observed relationships"]')
++    return "\n".join(lines) + "\n"
+diff --git a/ghost-trace-lite/main.py b/ghost-trace-lite/main.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..53b5ab9f1d699fcaccb4718eb3342c1069b842ec
+--- /dev/null
++++ b/ghost-trace-lite/main.py
+@@ -0,0 +1,6 @@
++"""Launch the GHOST TRACE Lite interactive menu from the project directory."""
++
++from ghost_trace_lite.cli import main
++
++if __name__ == "__main__":
++    raise SystemExit(main(["menu"]))
+diff --git a/ghost-trace-lite/pyproject.toml b/ghost-trace-lite/pyproject.toml
+new file mode 100644
+index 0000000000000000000000000000000000000000..052a933a4461d57af728f4c752cc863aff751521
+--- /dev/null
++++ b/ghost-trace-lite/pyproject.toml
+@@ -0,0 +1,20 @@
++[build-system]
++requires = ["setuptools>=61"]
++build-backend = "setuptools.build_meta"
++
++[project]
++name = "ghost-trace-lite"
++version = "2.1.0"
++description = "An offline-first cybersecurity investigation CLI"
++readme = "README.md"
++requires-python = ">=3.11"
++dependencies = []
++
++[project.scripts]
++ghost-trace = "ghost_trace_lite.cli:main"
++
++[tool.setuptools]
++packages = ["ghost_trace_lite"]
++
++[tool.setuptools.package-data]
++ghost_trace_lite = ["demo_data/*.csv", "demo_data/*.txt"]
+diff --git a/ghost-trace-lite/tests/test_analysis.py b/ghost-trace-lite/tests/test_analysis.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b2d7d16bb07e31d2e91e7b920a18dc8a1d668cd8
+--- /dev/null
++++ b/ghost-trace-lite/tests/test_analysis.py
+@@ -0,0 +1,191 @@
++import io
++import json
++import tempfile
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++from urllib.error import HTTPError, URLError
++
++from ghost_trace_lite.evidence import auth_event, flow_event, load_auth, utc_timestamp
++from ghost_trace_lite.ghost_trace import inspect_ioc, normalize_domain, virustotal_lookup
++from ghost_trace_lite.phantom_hunter import correlate
++from ghost_trace_lite.sentinel import alert_record, detect_failed_logins
++from ghost_trace_lite.shadow_proxy import inspect_headers
++from ghost_trace_lite.shadow_recon import check_scope, load_scope
++
++
++def login(row, clock, outcome="failure", user="analyst", source="192.0.2.1"):
++    return auth_event(row, {
++        "timestamp": f"2026-01-15T{clock}Z",
++        "user": user,
++        "host": "ws-1",
++        "host_ip": "10.0.0.17",
++        "src_ip": source,
++        "outcome": outcome,
++    })
++
++
++def flow(row, clock, source="10.0.0.17"):
++    return flow_event(row, {
++        "timestamp": f"2026-01-15T{clock}Z",
++        "src_ip": source,
++        "dst_ip": "198.51.100.23",
++        "dst_port": "443",
++        "protocol": "tcp",
++        "bytes": "1",
++    })
++
++
++class TestIndicators(unittest.TestCase):
++    def test_normalizes_ipv6_and_domains(self):
++        self.assertEqual(inspect_ioc(" 2001:0DB8::1 ")["value"], "2001:db8::1")
++        self.assertEqual(inspect_ioc(" UPDATES.Ronin.Test. "), {
++            "value": "updates.ronin.test", "type": "domain",
++        })
++
++    def test_rejects_invalid_indicators(self):
++        for value in ("", "http://ronin.test", "ronin", "a..test", "-a.test", "a-.test",
++                      "a.test..", "256.0.0.1", "fe80::1%eth0", "bad_label.test", "a" * 64 + ".test"):
++            with self.subTest(value=value), self.assertRaises(ValueError):
++                inspect_ioc(value)
++
++    def test_checks_total_domain_length(self):
++        self.assertEqual(len(normalize_domain(".".join(["a" * 63] * 3 + ["b" * 61]))), 253)
++        with self.assertRaises(ValueError):
++            normalize_domain(".".join(["a" * 63] * 3 + ["b" * 62]))
++
++    def test_ip_scopes(self):
++        cases = {
++            "8.8.8.8": "public", "1.1.1.1": "public", "192.168.1.1": "private",
++            "fd00::1": "private", "198.51.100.9": "documentation", "2001:db8::1": "documentation",
++            "100.64.0.1": "shared_address_space", "127.0.0.1": "loopback", "fe80::1": "link_local",
++            "224.0.0.1": "multicast", "::": "unspecified", "::ffff:10.0.0.1": "private",
++        }
++        for value, scope in cases.items():
++            with self.subTest(value=value):
++                self.assertEqual(inspect_ioc(value)["scope"], scope)
++
++    def test_wildcard_requires_a_dot_boundary_and_excludes_apex(self):
++        rules = ["*.ronin.test"]
++        for value in ("ronin.test", "notronin.test", "a.ronin.test.other"):
++            self.assertFalse(check_scope(value, rules)["in_scope"])
++        self.assertTrue(check_scope("A.B.RONIN.TEST.", rules)["in_scope"])
++        self.assertTrue(check_scope("ronin.test", ["ronin.test", *rules])["in_scope"])
++
++
++class TestVirusTotal(unittest.TestCase):
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_local_indicators_and_missing_key_do_not_open_connections(self, opener):
++        for value in ("10.0.0.1", "2001:db8::1", "x.ronin.test", "sub.example.com"):
++            self.assertEqual(virustotal_lookup(inspect_ioc(value), "mock-key")["status"], "skipped")
++        self.assertEqual(virustotal_lookup(inspect_ioc("8.8.8.8"), "")["status"], "error")
++        opener.assert_not_called()
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_ip_and_domain_reports(self, opener):
++        for value, endpoint in [("8.8.8.8", "ip_addresses"), ("python.org", "domains")]:
++            body = {"data": {"attributes": {"last_analysis_stats": {"malicious": 1, "harmless": 23},
++                                           "unneeded": "omit-this"}}}
++            opener.return_value.open.return_value = io.BytesIO(json.dumps(body).encode())
++            result = virustotal_lookup(inspect_ioc(value), "mock-key")
++            request = opener.return_value.open.call_args.args[0]
++            self.assertEqual(request.full_url, f"https://www.virustotal.com/api/v3/{endpoint}/{value}")
++            self.assertEqual(request.get_header("X-apikey"), "mock-key")
++            self.assertEqual(result, {"status": "ok", "last_analysis_stats": {"malicious": 1, "harmless": 23}})
++            self.assertIsNone(opener.call_args.args[0].redirect_request(None, None, 302, "", {}, "https://other.test"))
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_rate_limit_and_not_found(self, opener):
++        for code, status in ((429, "error"), (404, "not_found"), (302, "error"), (401, "error")):
++            opener.return_value.open.side_effect = HTTPError("", code, "ignore body", {}, io.BytesIO())
++            result = virustotal_lookup(inspect_ioc("8.8.8.8"), "mock-key")
++            self.assertEqual(result["status"], status)
++            self.assertNotIn("ignore body", result["message"])
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_malformed_response_and_network_error(self, opener):
++        opener.return_value.open.return_value = io.BytesIO(b'{"data": null}')
++        self.assertEqual(virustotal_lookup(inspect_ioc("8.8.8.8"), "mock-key")["status"], "error")
++        opener.return_value.open.side_effect = URLError("do not echo raw error")
++        result = virustotal_lookup(inspect_ioc("8.8.8.8"), "mock-key")
++        self.assertEqual(result["status"], "error")
++        self.assertNotIn("raw error", result["message"])
++
++
++class TestCorrelation(unittest.TestCase):
++    def test_threshold_uses_inclusive_window_and_evidence_ids(self):
++        events = [login(2, "14:00:00"), login(3, "14:02:00"), login(4, "14:05:00")]
++        alerts = detect_failed_logins(events)
++        self.assertEqual([alert_record(alert)["evidence_ids"] for alert in alerts],
++                         [["auth:2", "auth:3", "auth:4"]])
++        self.assertEqual(detect_failed_logins(events[:2] + [login(4, "14:05:01")]), [])
++
++    def test_success_and_other_sources_do_not_complete_a_burst(self):
++        events = [login(2, "14:00:00"), login(3, "14:01:00", "success"),
++                  login(4, "14:02:00"), login(5, "14:03:00", source="192.0.2.8"),
++                  login(6, "14:04:00", user="other")]
++        self.assertEqual(detect_failed_logins(events), [])
++
++    def test_hunt_uses_matching_success_and_only_later_same_host_flows(self):
++        events = [
++            login(2, "14:00:00"), login(3, "14:01:00"), login(4, "14:02:00"),
++            login(5, "14:03:00", "success", user="other"),
++            login(6, "14:12:00", "success"),
++        ]
++        flows = [flow(2, "14:11:00"), flow(3, "14:12:00"), flow(4, "14:13:00", "10.0.0.18"),
++                 flow(5, "14:22:00"), flow(6, "14:22:01")]
++        result = correlate(detect_failed_logins(events), events, flows)
++        self.assertEqual(result["correlations"], [{
++            "alert_id": "failed-logins:4", "success_evidence_id": "auth:6", "flow_evidence_ids": ["flow:5"],
++        }])
++        self.assertEqual([event["id"] for event in result["timeline"]],
++                         ["auth:2", "auth:3", "auth:4", "auth:6", "flow:5"])
++
++    def test_unmatched_success_produces_no_correlation(self):
++        events = [login(2, "14:00:00"), login(3, "14:01:00"), login(4, "14:02:00"),
++                  login(5, "14:12:01", "success")]
++        self.assertEqual(correlate(detect_failed_logins(events), events, [])["timeline"], [])
++
++    def test_explicit_offsets_are_converted_to_utc(self):
++        self.assertEqual(utc_timestamp("2026-01-15T07:00:00-07:00").isoformat(), "2026-01-15T14:00:00+00:00")
++        with self.assertRaises(ValueError):
++            utc_timestamp("2026-01-15T07:00:00")
++
++
++class TestEvidenceFiles(unittest.TestCase):
++    def test_header_redaction_and_duplicate_headers(self):
++        with tempfile.TemporaryDirectory() as folder:
++            path = Path(folder) / "headers.txt"
++            path.write_text(
++                "GET /q?key=secret-query HTTP/1.1\r\n"
++                "Host: [2001:db8::1]:8443\r\nContent-Type: application/json; x=secret-param\r\n"
++                "AUTHORIZATION: Bearer secret-auth\r\nCookie: secret-cookie\r\ncookie: second\r\n"
++                "X-Session-Token: secret-custom\r\n\r\nsecret-body",
++                encoding="utf-8",
++            )
++            result = inspect_headers(path)
++            self.assertEqual(result["method"], "GET")
++            self.assertEqual([header["value"] for header in result["headers"]],
++                             ["[2001:db8::1]:8443", "application/json"] + ["[redacted]"] * 4)
++            self.assertEqual([header["name"] for header in result["headers"]].count("cookie"), 2)
++            self.assertNotIn("secret", json.dumps(result))
++
++    def test_malformed_rows_include_file_and_line(self):
++        with tempfile.TemporaryDirectory() as folder:
++            root = Path(folder)
++            auth = root / "auth.csv"
++            auth.write_text("timestamp,user,host,host_ip,src_ip,outcome\n"
++                            "2026-01-15T14:00:00Z,analyst,ws-1,10.0.0.1,192.0.2.1\n", encoding="utf-8")
++            with self.assertRaisesRegex(ValueError, r"auth\.csv:2: unexpected number of columns"):
++                load_auth(auth)
++            scope = root / "scope.txt"
++            scope.write_text("# comment\n*.bad..test\n", encoding="utf-8")
++            with self.assertRaisesRegex(ValueError, r"scope\.txt:2: invalid scope rule"):
++                load_scope(scope)
++
++    def test_rejects_folded_headers_without_disclosing_values(self):
++        with tempfile.TemporaryDirectory() as folder:
++            path = Path(folder) / "headers.txt"
++            path.write_text("Authorization: token\n secret-continuation\n", encoding="utf-8")
++            with self.assertRaisesRegex(ValueError, r"^headers\.txt:2: expected a header name and colon$"):
++                inspect_headers(path)
+diff --git a/ghost-trace-lite/tests/test_cli.py b/ghost-trace-lite/tests/test_cli.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..69a6962118ac5c99906276b1dcf596e2d39703a3
+--- /dev/null
++++ b/ghost-trace-lite/tests/test_cli.py
+@@ -0,0 +1,96 @@
++import json
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++
++from ghost_trace_lite.cli import DEMO_DIR
++from ghost_trace_lite.ronin_soc import build_case, export_case
++
++
++class TestCLI(unittest.TestCase):
++    def run_cli(self, *arguments, code=0):
++        result = subprocess.run(
++            [sys.executable, "-m", "ghost_trace_lite", *map(str, arguments)],
++            capture_output=True, text=True, encoding="utf-8", check=False,
++        )
++        self.assertEqual(result.returncode, code, result.stdout + result.stderr)
++        return result
++
++    def test_demo_runs_all_modules_and_exports_a_consistent_case(self):
++        with tempfile.TemporaryDirectory() as folder:
++            output = Path(folder) / "new-case"
++            summary = json.loads(self.run_cli("demo", "--out", output).stdout)
++            self.assertEqual(summary["alerts"], 1)
++            self.assertEqual(summary["correlated_logins"], 1)
++            self.assertEqual(sorted(path.name for path in output.iterdir()),
++                             ["case.json", "case.md", "relationships.mmd"])
++
++            case_text = (output / "case.json").read_text(encoding="utf-8")
++            case = json.loads(case_text)
++            report = (output / "case.md").read_text(encoding="utf-8")
++            graph = (output / "relationships.mmd").read_text(encoding="utf-8")
++            self.assertEqual(case["hunt"]["correlations"][0]["flow_evidence_ids"], ["flow:4", "flow:5"])
++            self.assertEqual(case["traffic"]["total_bytes"], 20374)
++            self.assertTrue(case["indicators"])
++            self.assertEqual(case["explanations"][0]["evidence_ids"], ["auth:2", "auth:3", "auth:4"])
++            self.assertTrue(any(not check["in_scope"] for check in case["scope_checks"]))
++            self.assertTrue(any(step["evidence_ids"] == ["flow:4", "flow:5"] for step in case["next_steps"]))
++            self.assertIn("updates.ronin.test", graph)
++            self.assertIn(graph, report)
++            for sample_secret in ("synthetic-auth", "synthetic-session", "synthetic-key",
++                                  "synthetic-query", "synthetic-parameter", "SyntheticLab"):
++                self.assertNotIn(sample_secret, case_text + report + graph)
++            self.run_cli("demo", "--out", output, code=2)
++            self.assertEqual((output / "case.json").read_text(encoding="utf-8"), case_text)
++
++    def test_each_module_command_has_usable_output(self):
++        auth = DEMO_DIR / "auth.csv"
++        flows = DEMO_DIR / "flows.csv"
++        rules = DEMO_DIR / "scope.txt"
++        commands = [
++            (("ioc", "192.0.2.44"), "documentation"),
++            (("scope", "updates.ronin.test", "--rules", rules), '"in_scope": true'),
++            (("detect", auth), "failed-logins:4"),
++            (("traffic", flows), '"flow_count": 5'),
++            (("hunt", auth, flows), "auth:5"),
++            (("explain", auth), "3 failed logins"),
++            (("map", auth, flows), "flowchart TD"),
++            (("headers", DEMO_DIR / "headers.txt"), "[redacted]"),
++            (("advise", DEMO_DIR), "Check MFA"),
++        ]
++        for args, marker in commands:
++            with self.subTest(command=args[0]):
++                self.assertIn(marker, self.run_cli(*args).stdout)
++        with tempfile.TemporaryDirectory() as folder:
++            output = Path(folder) / "investigation"
++            self.run_cli("investigate", DEMO_DIR, "--out", output, "--threshold", 4)
++            case = json.loads((output / "case.json").read_text(encoding="utf-8"))
++            self.assertEqual(case["alerts"], [])
++
++    def test_exit_codes_and_usage_errors(self):
++        self.assertIn("expected a dotted ASCII hostname", self.run_cli("ioc", "bad..domain", code=2).stderr)
++        self.assertIn('"in_scope": false', self.run_cli(
++            "scope", "notronin.test", "--rules", DEMO_DIR / "scope.txt", code=1).stdout)
++        self.assertIn("expected an integer", self.run_cli(
++            "detect", DEMO_DIR / "auth.csv", "--window", "0", code=2).stderr)
++
++    def test_case_export_cleans_up_a_failed_write(self):
++        case = build_case(DEMO_DIR)
++        write_text = Path.write_text
++
++        def fail_second_write(path, *args, **kwargs):
++            if path.name == "case.md":
++                raise OSError("simulated write failure")
++            return write_text(path, *args, **kwargs)
++
++        with tempfile.TemporaryDirectory() as folder:
++            output = Path(folder) / "failed-case"
++            with patch.object(Path, "write_text", fail_second_write):
++                with self.assertRaisesRegex(OSError, "simulated write failure"):
++                    export_case(case, output)
++            self.assertFalse(output.exists())
++            export_case(case, output)
++            self.assertTrue((output / "case.json").exists())
+diff --git a/ghost-trace-lite/tests/test_menu.py b/ghost-trace-lite/tests/test_menu.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..5769991717e5e181fdebfcb0095928bcd3b84ebc
+--- /dev/null
++++ b/ghost-trace-lite/tests/test_menu.py
+@@ -0,0 +1,119 @@
++import contextlib
++import io
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++import tempfile
++import unittest
++from unittest.mock import patch
++from urllib.error import URLError
++from urllib.parse import parse_qs, urlsplit
++
++from ghost_trace_lite.cli import main
++from ghost_trace_lite.enrichment import enrich_indicator
++from ghost_trace_lite.ghost_trace import inspect_ioc
++
++
++class TestInteractiveMenu(unittest.TestCase):
++    def test_launcher_routes_all_ten_tools_and_demo(self):
++        with tempfile.TemporaryDirectory() as folder:
++            root = Path(folder)
++            case = root / "menu case"
++            demo = root / "menu demo"
++            inputs = [
++                "1", "192.0.2.44", "",
++                "2", "updates.ronin.test", "",
++                "3", "", "4", "", "5", "", "",
++                "6", "", "7", "", "", "8", "",
++                "9", "", f'"{case}"', "10", "",
++                "11", str(demo), "0",
++            ]
++            run = subprocess.run(
++                [sys.executable, "main.py"], input="\n".join(inputs) + "\n",
++                capture_output=True, text=True, encoding="utf-8", check=False,
++            )
++            self.assertEqual(run.returncode, 0, run.stderr)
++            self.assertEqual(run.stderr, "")
++            for value in ("documentation", '"in_scope": true', "failed-logins:4", '"flow_count": 5',
++                          "auth:5", "3 failed logins", "flowchart TD", "[redacted]", "Check MFA"):
++                self.assertIn(value, run.stdout)
++            self.assertTrue((case / "case.json").is_file())
++            self.assertTrue((demo / "relationships.mmd").is_file())
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    @patch("ghost_trace_lite.menu.getpass.getpass", return_value="sample-session-secret")
++    def test_session_key_precedence_decline_clear_and_environment_fallback(self, masked_input, opener):
++        def provider_response(*args, **kwargs):
++            return io.BytesIO(b'{"pulse_info":{"count":5}}')
++
++        opener.return_value.open.side_effect = provider_response
++        inputs = [
++            "12", "3", "s",
++            "1", "python.org", "3", "n",
++            "1", "python.org", "3", "y",
++            "12", "3", "c",
++            "1", "python.org", "3", "y",
++            "0",
++        ]
++        output = io.StringIO()
++        with patch.dict(os.environ, {"OTX_API_KEY": "sample-env-secret"}):
++            with patch("builtins.input", side_effect=inputs), contextlib.redirect_stdout(output):
++                self.assertEqual(main(["menu"]), 0)
++            self.assertEqual(os.environ["OTX_API_KEY"], "sample-env-secret")
++        masked_input.assert_called_once()
++        self.assertEqual(opener.return_value.open.call_count, 2)
++        requests = [call.args[0] for call in opener.return_value.open.call_args_list]
++        self.assertEqual([request.get_header("X-otx-api-key") for request in requests],
++                         ["sample-session-secret", "sample-env-secret"])
++        self.assertIn('"pulse_count": 5', output.getvalue())
++        self.assertNotIn("sample-session-secret", output.getvalue())
++        self.assertNotIn("sample-env-secret", output.getvalue())
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_virustotal_flag_keeps_legacy_result_key(self, opener):
++        output = io.StringIO()
++        with contextlib.redirect_stdout(output):
++            self.assertEqual(main(["ioc", "10.0.0.1", "--virustotal"]), 0)
++        self.assertEqual(json.loads(output.getvalue())["virustotal"]["status"], "skipped")
++        opener.assert_not_called()
++
++
++class TestAdditionalProviders(unittest.TestCase):
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_shodan_host_lookup_encodes_key_and_returns_only_summary_fields(self, opener):
++        opener.return_value.open.return_value = io.BytesIO(
++            b'{"ports":[443,53,53,-1,true],"org":"Sample","data":[{"banner":"omit"}]}'
++        )
++        result = enrich_indicator(inspect_ioc("8.8.8.8"), "shodan", "test+key")
++        request = opener.return_value.open.call_args.args[0]
++        url = urlsplit(request.full_url)
++        self.assertEqual((url.scheme, url.netloc, url.path), ("https", "api.shodan.io", "/shodan/host/8.8.8.8"))
++        self.assertEqual(parse_qs(url.query), {"key": ["test+key"], "minify": ["true"]})
++        self.assertEqual(result, {"status": "ok", "ports": [53, 443], "org": "Sample"})
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_otx_lookup_uses_indicator_type_and_header(self, opener):
++        opener.return_value.open.return_value = io.BytesIO(b'{"pulse_info":{"count":3}}')
++        result = enrich_indicator(inspect_ioc("2001:4860:4860::8888"), "otx", "test-key")
++        request = opener.return_value.open.call_args.args[0]
++        self.assertEqual(request.full_url,
++                         "https://otx.alienvault.com/api/v1/indicators/IPv6/2001%3A4860%3A4860%3A%3A8888/general")
++        self.assertEqual(request.get_header("X-otx-api-key"), "test-key")
++        self.assertEqual(result, {"status": "ok", "pulse_count": 3})
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_nonpublic_or_unsupported_inputs_do_not_connect(self, opener):
++        self.assertEqual(enrich_indicator(inspect_ioc("python.org"), "shodan", "test")["status"], "skipped")
++        self.assertEqual(enrich_indicator(inspect_ioc("10.0.0.1"), "shodan", "test")["status"], "skipped")
++        self.assertEqual(enrich_indicator(inspect_ioc("site.test"), "otx", "test")["status"], "skipped")
++        self.assertEqual(enrich_indicator(inspect_ioc("python.org"), "otx", "bad\nkey")["status"], "error")
++        opener.assert_not_called()
++
++    @patch("ghost_trace_lite.ghost_trace.build_opener")
++    def test_network_errors_hide_request_details(self, opener):
++        opener.return_value.open.side_effect = URLError("request URL contained test-secret")
++        result = enrich_indicator(inspect_ioc("8.8.8.8"), "shodan", "test-secret")
++        self.assertEqual(result["status"], "error")
++        self.assertNotIn("test-secret", json.dumps(result))
+diff --git a/pytest.ini b/pytest.ini
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ee6477165727539aa0701c22b47da2ceaedeff5
+--- /dev/null
++++ b/pytest.ini
+@@ -0,0 +1,2 @@
++[pytest]
++testpaths = tests

@@ -1,0 +1,9 @@
+GET /download?token=synthetic-query-value HTTP/1.1
+Host: updates.ronin.test
+Authorization: Bearer synthetic-auth-value
+Cookie: session=synthetic-session-value
+Content-Type: application/json; boundary=synthetic-parameter-value
+X-Api-Key: synthetic-key-value
+User-Agent: SyntheticLab/1.0
+
+This body is outside the header block.

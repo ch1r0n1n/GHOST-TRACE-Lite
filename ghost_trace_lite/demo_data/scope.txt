@@ -1,0 +1,3 @@
+# Fictional lab scope
+ronin.test
+*.ronin.test

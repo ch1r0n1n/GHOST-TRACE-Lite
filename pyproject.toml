@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ghost-trace-lite"
+version = "2.1.0"
+description = "An offline-first cybersecurity investigation CLI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+ghost-trace = "ghost_trace_lite.cli:main"
+
+[tool.setuptools]
+packages = ["ghost_trace_lite"]
+
+[tool.setuptools.package-data]
+ghost_trace_lite = ["demo_data/*.csv", "demo_data/*.txt"]

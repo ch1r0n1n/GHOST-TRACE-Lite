@@ -1,0 +1,6 @@
+timestamp,src_ip,dst_ip,dst_port,protocol,bytes,dst_domain
+2026-01-15T14:02:00Z,10.0.0.17,203.0.113.11,443,tcp,300,portal.ronin.test
+2026-01-15T14:03:40Z,10.0.0.18,203.0.113.11,443,tcp,2800,portal.ronin.test
+2026-01-15T14:04:00Z,10.0.0.17,198.51.100.23,443,tcp,16384,updates.ronin.test
+2026-01-15T14:05:00Z,10.0.0.17,198.51.100.24,443,tcp,640,relay.unrelated.test
+2026-01-15T14:20:00Z,10.0.0.17,203.0.113.11,443,tcp,250,portal.ronin.test
